@@ -1,9 +1,9 @@
 from __future__ import annotations
-from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import List, Dict, Any
 
 DEFAULT_EPISODE_MINUTES = 45
+
 
 def minutes_for_event(e) -> int:
     # Prefer explicit runtime_minutes
@@ -13,6 +13,7 @@ def minutes_for_event(e) -> int:
     if e.episode_count is not None:
         return max(0, int(e.episode_count) * DEFAULT_EPISODE_MINUTES)
     return 0
+
 
 def longest_streak(days: List[date]) -> Dict[str, Any]:
     if not days:
@@ -49,11 +50,14 @@ def longest_streak(days: List[date]) -> Dict[str, Any]:
         "end": best_end.isoformat(),
     }
 
+
 def build_wrapped_summary(events, year: int) -> Dict[str, Any]:
-    # events: list of WatchEvent objects
     total_minutes = 0
     title_minutes: Dict[str, int] = {}
-    media_breakdown = {"movie": {"count": 0, "minutes": 0}, "series": {"count": 0, "minutes": 0}}
+    media_breakdown = {
+        "movie": {"count": 0, "minutes": 0},
+        "series": {"count": 0, "minutes": 0},
+    }
     watched_days: List[date] = []
 
     for e in events:
@@ -82,15 +86,25 @@ def build_wrapped_summary(events, year: int) -> Dict[str, Any]:
     watch_days = len(unique_days)
     avg_minutes_per_day = round(total_minutes / watch_days, 2) if watch_days else 0
 
+    # NEW: hours fields (frontend-friendly)
+    total_hours = round(total_minutes / 60, 1) if total_minutes else 0
+    avg_hours_per_day = round(avg_minutes_per_day / 60, 2) if avg_minutes_per_day else 0
+
+    # NEW: share-friendly sentence
+    share_text = f"I watched {total_hours} hours and {total_titles} titles in {year} 🎬🔥"
+
     return {
         "year": year,
         "total_minutes": total_minutes,
+        "total_hours": total_hours,
         "total_titles": total_titles,
         "watch_days": watch_days,
         "avg_minutes_per_day": avg_minutes_per_day,
+        "avg_hours_per_day": avg_hours_per_day,
         "media_type_breakdown": media_breakdown,
         "top_titles": top_titles,
         "binge_streak": binge,
+        "share_text": share_text,
         "assumptions": {
             "default_episode_minutes": DEFAULT_EPISODE_MINUTES,
             "series_minutes_if_missing_runtime": "episode_count * default_episode_minutes",
