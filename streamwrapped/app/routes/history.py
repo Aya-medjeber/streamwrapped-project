@@ -10,13 +10,16 @@ from ..extensions import db
 from ..models.watch_event import WatchEvent
 from ..utils.responses import ok, err
 
+# cache invalidation helper (from wrapped.py)
+from .wrapped import invalidate_cache
+
+
 history_bp = Blueprint("history", __name__)
 
 ALLOWED_MEDIA_TYPES = {"movie", "series"}
 
 
 def _parse_watched_at(value: str) -> date:
-    # Accepts "2024-12-01", "12/1/2024", etc.
     dt = parse_date(value)
     return dt.date()
 
@@ -83,6 +86,9 @@ def add_history_item():
     db.session.add(event)
     db.session.commit()
 
+    # IMPORTANT: cache invalidation for that year
+    invalidate_cache(user_id, watched_at.year)
+
     return ok({"watch_event": event.to_dict()}, status=201)
 
 
@@ -105,12 +111,19 @@ def list_history():
 @jwt_required()
 def delete_history_item(event_id: int):
     user_id = int(get_jwt_identity())
+
     event = WatchEvent.query.filter_by(id=event_id, user_id=user_id).first()
     if not event:
         return err("NOT_FOUND", "watch event not found", 404)
 
+    yr = event.watched_at.year
+
     db.session.delete(event)
     db.session.commit()
+
+    # IMPORTANT: cache invalidation for that year
+    invalidate_cache(user_id, yr)
+
     return ok({"deleted": True})
 
 
@@ -143,6 +156,7 @@ def upload_csv():
     inserted = 0
     skipped = 0
     errors = []
+    years_touched = set()
 
     for idx, row in enumerate(reader, start=2):  # header is row 1
         try:
@@ -169,6 +183,7 @@ def upload_csv():
                 continue
 
             watched_at = _parse_watched_at(watched_at_raw)
+            years_touched.add(watched_at.year)
 
             runtime_minutes = _clean_int(row.get("runtime_minutes"))
             episode_count = _clean_int(row.get("episode_count"))
@@ -201,10 +216,15 @@ def upload_csv():
 
     db.session.commit()
 
+    # IMPORTANT: invalidate cache for all years touched by upload
+    for y in years_touched:
+        invalidate_cache(user_id, y)
+
     return ok(
         {
             "inserted": inserted,
             "skipped": skipped,
             "errors": errors[:50],  # cap so response isn't huge
+            "years_touched": sorted(list(years_touched)),
         }
     )
