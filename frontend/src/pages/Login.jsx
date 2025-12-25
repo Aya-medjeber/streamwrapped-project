@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
+import { isValidEmail, validatePassword } from "../utils/validation";
 import { useNavigate } from "react-router-dom";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
@@ -6,19 +7,51 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 export default function Login() {
   const navigate = useNavigate();
   const [mode, setMode] = useState("login");
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
+
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
+  const [emailErr, setEmailErr] = useState("");
+  const [passwordErr, setPasswordErr] = useState("");
 
   const setToken = (token) => localStorage.setItem("sw_token", token);
   const setUser = (user) =>
     localStorage.setItem("sw_user", JSON.stringify(user || {}));
 
+  const pwCheck = useMemo(() => validatePassword(password), [password]);
+
+  function runValidation() {
+    setErr("");
+
+    if (!isValidEmail(email)) {
+      setEmailErr("Enter a valid email address.");
+      return false;
+    }
+
+    const pw = validatePassword(password);
+    if (!pw.ok) {
+      setPasswordErr(`Password must have: ${pw.errors.join(", ")}`);
+      return false;
+    }
+
+    if (mode === "register" && !name.trim()) {
+      setErr("Please enter your name.");
+      return false;
+    }
+
+    return true;
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
-    setErr("");
+    setEmailErr("");
+    setPasswordErr("");
+
+    if (!runValidation()) return;
+
     setLoading(true);
 
     try {
@@ -42,13 +75,13 @@ export default function Login() {
         if (!res.ok) throw new Error("Authentication failed");
 
         const data = await res.json();
-        const token = data.access || data.token || "demo-token";
-        setToken(token);
+        setToken(data.access || data.token || "demo-token");
         setUser(data.user || { name: name || "User", email });
         navigate("/upload");
         return;
       }
 
+      // Demo mode
       await new Promise((r) => setTimeout(r, 450));
       setToken("demo-token");
       setUser({ name: name || "User", email });
@@ -66,9 +99,11 @@ export default function Login() {
         <div style={styles.left}>
           <div style={{ maxWidth: 520 }}>
             <div style={styles.badge}>StreamWrapped</div>
+
             <h1 style={styles.h1}>
               {mode === "login" ? "Welcome back." : "Create your account."}
             </h1>
+
             <p style={styles.p}>
               Log in to upload your watch history and generate your <b>Wrapped</b>.
             </p>
@@ -90,36 +125,73 @@ export default function Login() {
               <div style={styles.field}>
                 <label style={styles.label}>Email</label>
                 <input
-                  style={styles.input}
+                  style={{
+                    ...styles.input,
+                    ...(emailErr ? styles.inputError : {}),
+                  }}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@example.com"
                   type="email"
                   required
                 />
+                {emailErr && <div style={styles.fieldError}>{emailErr}</div>}
               </div>
 
               <div style={styles.field}>
                 <label style={styles.label}>Password</label>
                 <input
-                  style={styles.input}
+                  style={{
+                    ...styles.input,
+                    ...(passwordErr ? styles.inputError : {}),
+                  }}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
                   type="password"
                   required
                 />
+                {passwordErr && (
+                  <div style={styles.fieldError}>{passwordErr}</div>
+                )}
               </div>
+
+              {mode === "register" && password.length > 0 && (
+                <div style={styles.pwBox}>
+                  <div style={{ fontWeight: 800, marginBottom: 8 }}>
+                    Password requirements
+                  </div>
+                  <ul style={styles.pwList}>
+                    {[
+                      "At least 8 characters",
+                      "At least 1 lowercase letter",
+                      "At least 1 uppercase letter",
+                      "At least 1 number",
+                      "At least 1 special character",
+                    ].map((req) => (
+                      <li key={req} style={styles.pwItem}>
+                        {pwCheck.errors.includes(req) ? "•" : "✓"} {req}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
 
               {err && <div style={styles.error}>{err}</div>}
 
               <button disabled={loading} style={styles.primaryBtn}>
-                {loading ? "Please wait..." : mode === "login" ? "Login" : "Create account"}
+                {loading
+                  ? "Please wait..."
+                  : mode === "login"
+                  ? "Login"
+                  : "Create account"}
               </button>
 
               <button
                 type="button"
-                onClick={() => setMode(mode === "login" ? "register" : "login")}
+                onClick={() =>
+                  setMode(mode === "login" ? "register" : "login")
+                }
                 style={styles.ghostBtn}
               >
                 {mode === "login"
@@ -156,17 +228,16 @@ export default function Login() {
   );
 }
 
+/* ================= STYLES ================= */
+
 const styles = {
   page: {
     minHeight: "100vh",
     width: "100vw",
     display: "grid",
     placeItems: "center",
-
-    /* 🔥 SAME GRADIENT AS DASHBOARD */
     background:
       "linear-gradient(135deg, #ff5fa2 0%, #d946ef 30%, #7c3aed 55%, #0b0b12 100%)",
-
     color: "#fff",
   },
   shell: {
@@ -177,15 +248,10 @@ const styles = {
     display: "grid",
     gridTemplateColumns: "1.2fr 0.8fr",
     border: "1px solid rgba(255,255,255,0.12)",
-    boxShadow: "0 30px 80px rgba(0,0,0,0.55)",
     background: "rgba(0,0,0,0.35)",
     backdropFilter: "blur(12px)",
   },
-  left: {
-    padding: "56px",
-    display: "flex",
-    alignItems: "center",
-  },
+  left: { padding: "56px", display: "flex", alignItems: "center" },
   right: {
     padding: "56px",
     display: "flex",
@@ -194,22 +260,18 @@ const styles = {
     background: "rgba(255,255,255,0.05)",
   },
   badge: {
-    display: "inline-flex",
     padding: "6px 12px",
     borderRadius: 999,
     border: "1px solid rgba(255,255,255,0.25)",
     background: "rgba(255,255,255,0.12)",
     marginBottom: 18,
     fontWeight: 700,
+    display: "inline-block",
   },
-  h1: {
-    fontSize: "clamp(34px, 4vw, 54px)",
-    margin: "0 0 10px 0",
-    fontWeight: 900,
-  },
-  p: { opacity: 0.85, margin: "0 0 28px 0", lineHeight: 1.45 },
+  h1: { fontSize: 48, fontWeight: 900, marginBottom: 10 },
+  p: { opacity: 0.85, marginBottom: 28 },
   form: { display: "grid", gap: 16 },
-  field: { display: "grid", gap: 8 },
+  field: { display: "grid", gap: 6 },
   label: { fontSize: 13, opacity: 0.85 },
   input: {
     height: 46,
@@ -218,27 +280,28 @@ const styles = {
     background: "rgba(0,0,0,0.35)",
     color: "#fff",
     padding: "0 14px",
-    outline: "none",
   },
+  inputError: {
+    border: "1px solid rgba(239,68,68,0.8)",
+  },
+  fieldError: { fontSize: 12, color: "#fecaca" },
   primaryBtn: {
     height: 46,
     borderRadius: 12,
     border: "none",
-    fontWeight: 800,
-    cursor: "pointer",
-
-    /* pink button */
     background: "linear-gradient(135deg, #ff5fa2, #d946ef)",
     color: "#fff",
+    fontWeight: 800,
+    cursor: "pointer",
   },
   ghostBtn: {
     height: 46,
     borderRadius: 12,
     border: "1px solid rgba(255,255,255,0.25)",
-    fontWeight: 700,
-    cursor: "pointer",
     background: "rgba(255,255,255,0.08)",
     color: "#fff",
+    fontWeight: 700,
+    cursor: "pointer",
   },
   error: {
     padding: "10px 12px",
@@ -248,16 +311,22 @@ const styles = {
     color: "#fecaca",
     fontSize: 14,
   },
-  previewCard: {
-    width: "100%",
-    maxWidth: 360,
-    borderRadius: 20,
-    padding: 22,
+  pwBox: {
+    padding: 12,
+    borderRadius: 12,
+    background: "rgba(255,255,255,0.06)",
     border: "1px solid rgba(255,255,255,0.16)",
-    background: "rgba(0,0,0,0.35)",
-    boxShadow: "0 18px 50px rgba(0,0,0,0.45)",
   },
-  previewTitle: { fontWeight: 900, fontSize: 16, opacity: 0.9 },
+  pwList: { paddingLeft: 16, display: "grid", gap: 6 },
+  pwItem: { fontSize: 12 },
+  previewCard: {
+    width: 360,
+    padding: 22,
+    borderRadius: 20,
+    background: "rgba(0,0,0,0.35)",
+    border: "1px solid rgba(255,255,255,0.16)",
+  },
+  previewTitle: { fontWeight: 900 },
   previewLine: {
     height: 1,
     background: "rgba(255,255,255,0.18)",
@@ -266,8 +335,7 @@ const styles = {
   previewStat: {
     display: "flex",
     justifyContent: "space-between",
-    padding: "10px 0",
-    opacity: 0.95,
+    padding: "8px 0",
   },
   previewHint: { marginTop: 12, fontSize: 13, opacity: 0.75 },
 };

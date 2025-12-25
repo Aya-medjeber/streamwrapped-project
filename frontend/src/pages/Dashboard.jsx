@@ -16,11 +16,8 @@ export default function Dashboard() {
       style={{
         minHeight: "100vh",
         width: "100vw",
-
-        /* 🔥 UPDATED COLOR ONLY */
         background:
           "linear-gradient(135deg, #ff5fa2 0%, #d946ef 30%, #7c3aed 55%, #0b0b12 100%)",
-
         color: "#fff",
         padding: "40px",
       }}
@@ -33,6 +30,7 @@ export default function Dashboard() {
           Quick summary before your Wrapped.
         </p>
 
+        {/* Stats cards */}
         <div
           style={{
             display: "grid",
@@ -47,8 +45,6 @@ export default function Dashboard() {
               style={{
                 padding: 18,
                 borderRadius: 16,
-
-                /* keep cards readable */
                 background: "rgba(0,0,0,0.35)",
                 border: "1px solid rgba(255,255,255,0.15)",
                 backdropFilter: "blur(8px)",
@@ -62,10 +58,26 @@ export default function Dashboard() {
           ))}
         </div>
 
-        <div style={{ display: "flex", gap: 12, marginTop: 26 }}>
+        {/* Action buttons */}
+        <div
+          style={{
+            display: "flex",
+            gap: 12,
+            marginTop: 26,
+            flexWrap: "wrap",
+          }}
+        >
           <button onClick={() => navigate("/wrapped")} style={primaryBtn}>
-            View Wrapped
+            Movies Wrapped
           </button>
+
+          <button
+            onClick={() => navigate("/youtube")}
+            style={youtubeBtn}
+          >
+            YouTube Wrapped 
+          </button>
+
           <button onClick={() => navigate("/upload")} style={secondaryBtn}>
             Back to Upload
           </button>
@@ -75,6 +87,7 @@ export default function Dashboard() {
   );
 }
 
+/* Button styles */
 const primaryBtn = {
   padding: "12px 16px",
   borderRadius: 12,
@@ -92,5 +105,15 @@ const secondaryBtn = {
   background: "rgba(255,255,255,0.08)",
   color: "#fff",
   fontWeight: 700,
+  cursor: "pointer",
+};
+
+const youtubeBtn = {
+  padding: "12px 16px",
+  borderRadius: 12,
+  border: "1px solid rgba(255,255,255,0.25)",
+  background: "linear-gradient(135deg, #ff5fa2, #7c3aed)",
+  color: "#fff",
+  fontWeight: 800,
   cursor: "pointer",
 };
