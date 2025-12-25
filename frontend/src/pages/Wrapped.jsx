@@ -1,5 +1,24 @@
 import React, { useMemo, useState } from "react";
 import Slide from "../features/wrapped/Slide";
+import { AnimatePresence, motion } from "framer-motion";
+
+const slideVariants = {
+  enter: (direction) => ({
+    x: direction > 0 ? 240 : -240,
+    opacity: 0,
+    scale: 0.98,
+  }),
+  center: {
+    x: 0,
+    opacity: 1,
+    scale: 1,
+  },
+  exit: (direction) => ({
+    x: direction > 0 ? -240 : 240,
+    opacity: 0,
+    scale: 0.98,
+  }),
+};
 
 export default function Wrapped() {
   const slides = useMemo(
@@ -43,33 +62,55 @@ export default function Wrapped() {
   );
 
   const [index, setIndex] = useState(0);
+  const [direction, setDirection] = useState(1); // 1 = next, -1 = back
+
   const totalSteps = slides.length;
   const current = slides[index];
 
-  const onNext = () => setIndex((i) => Math.min(i + 1, totalSteps - 1));
-  const onBack = () => setIndex((i) => Math.max(i - 1, 0));
+  const onNext = () => {
+    setDirection(1);
+    setIndex((i) => Math.min(i + 1, totalSteps - 1));
+  };
+
+  const onBack = () => {
+    setDirection(-1);
+    setIndex((i) => Math.max(i - 1, 0));
+  };
 
   return (
-    <Slide
-      title={current.title}
-      subtitle={current.subtitle}
-      step={index + 1}
-      totalSteps={totalSteps}
-      onNext={onNext}
-      onBack={onBack}
-      theme={current.theme}
-    >
-      {current.value && (
-        <div
-          style={{
-            fontSize: "clamp(48px, 6vw, 86px)",
-            fontWeight: 900,
-            marginTop: 16,
-          }}
+    <AnimatePresence mode="wait" custom={direction}>
+      <motion.div
+        key={index}
+        custom={direction}
+        variants={slideVariants}
+        initial="enter"
+        animate="center"
+        exit="exit"
+        transition={{ duration: 0.5, ease: "easeInOut" }}
+        style={{ height: "100%" }}
+      >
+        <Slide
+          title={current.title}
+          subtitle={current.subtitle}
+          step={index + 1}
+          totalSteps={totalSteps}
+          onNext={onNext}
+          onBack={onBack}
+          theme={current.theme}
         >
-          {current.value}
-        </div>
-      )}
-    </Slide>
+          {current.value && (
+            <div
+              style={{
+                fontSize: "clamp(48px, 6vw, 86px)",
+                fontWeight: 900,
+                marginTop: 16,
+              }}
+            >
+              {current.value}
+            </div>
+          )}
+        </Slide>
+      </motion.div>
+    </AnimatePresence>
   );
 }
