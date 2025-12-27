@@ -1,0 +1,8 @@
+# backend/streamwrapped/analytics/constants.py
+
+HOURS_ROUND_DECIMALS = 2
+DEFAULT_TOP_N = 5
+
+CONTENT_TYPE_MOVIE = "movie"
+CONTENT_TYPE_SHOW = "show"
+ALLOWED_CONTENT_TYPES = {CONTENT_TYPE_MOVIE, CONTENT_TYPE_SHOW}
