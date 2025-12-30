@@ -1,15 +1,43 @@
 from datetime import datetime
 from ..extensions import db
+from .title import Title
+
 
 class WatchEvent(db.Model):
     __tablename__ = "watch_events"
 
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
 
+    # user reference
+    user_id = db.Column(
+        db.Integer,
+        db.ForeignKey("users.id"),
+        nullable=False,
+        index=True,
+    )
+
+    # NEW: title metadata reference
+    title_id = db.Column(
+        db.Integer,
+        db.ForeignKey("titles.id"),
+        nullable=True,
+        index=True,
+    )
+
+    # keep original title string for backward compatibility
     title = db.Column(db.String(255), nullable=False)
-    media_type = db.Column(db.String(20), nullable=False)  # movie | series
-    watched_at = db.Column(db.Date, nullable=False, index=True)
+
+    media_type = db.Column(
+        db.String(20),
+        nullable=False,
+        index=True,  # movie | series
+    )
+
+    watched_at = db.Column(
+        db.Date,
+        nullable=False,
+        index=True,
+    )
 
     runtime_minutes = db.Column(db.Integer, nullable=True)
     episode_count = db.Column(db.Integer, nullable=True)
@@ -17,7 +45,17 @@ class WatchEvent(db.Model):
     provider = db.Column(db.String(60), nullable=True)
     notes = db.Column(db.String(255), nullable=True)
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(
+        db.DateTime,
+        default=datetime.utcnow,
+        nullable=False,
+    )
+
+    # relationship to Title (optional but very useful)
+    title_ref = db.relationship(
+        "Title",
+        lazy="joined",
+    )
 
     def to_dict(self):
         return {
@@ -30,4 +68,5 @@ class WatchEvent(db.Model):
             "rating": self.rating,
             "provider": self.provider,
             "notes": self.notes,
+            "title_id": self.title_id,
         }

@@ -8,6 +8,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 
 from ..extensions import db
 from ..models.watch_event import WatchEvent
+from ..models.title import Title
 from ..utils.responses import ok, err
 
 # cache invalidation helper (from wrapped.py)
@@ -42,6 +43,24 @@ def _clean_float(value):
         return None
 
 
+def _get_or_create_title_id(name: str, media_type: str) -> int:
+    """
+    Find or create a Title row and return its id.
+    Keeps Title unique by (name, media_type).
+    """
+    clean_name = (name or "").strip()
+    clean_type = (media_type or "").strip().lower()
+
+    existing = Title.query.filter_by(name=clean_name, media_type=clean_type).first()
+    if existing:
+        return existing.id
+
+    t = Title(name=clean_name, media_type=clean_type)
+    db.session.add(t)
+    db.session.flush()  # get id without committing yet
+    return t.id
+
+
 @history_bp.post("/")
 @jwt_required()
 def add_history_item():
@@ -72,8 +91,11 @@ def add_history_item():
     if rating is not None and (rating < 0 or rating > 10):
         return err("VALIDATION_ERROR", "rating must be between 0 and 10", 400)
 
+    title_id = _get_or_create_title_id(title, media_type)
+
     event = WatchEvent(
         user_id=user_id,
+        title_id=title_id,
         title=title,
         media_type=media_type,
         watched_at=watched_at,
@@ -196,8 +218,11 @@ def upload_csv():
                 errors.append({"row": idx, "reason": "rating must be between 0 and 10"})
                 continue
 
+            title_id = _get_or_create_title_id(title, media_type)
+
             event = WatchEvent(
                 user_id=user_id,
+                title_id=title_id,
                 title=title,
                 media_type=media_type,
                 watched_at=watched_at,
