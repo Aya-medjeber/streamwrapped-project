@@ -1,6 +1,5 @@
 from datetime import datetime
 from ..extensions import db
-from .title import Title
 
 
 class WatchEvent(db.Model):
@@ -16,7 +15,7 @@ class WatchEvent(db.Model):
         index=True,
     )
 
-    # NEW: title metadata reference
+    # title metadata reference
     title_id = db.Column(
         db.Integer,
         db.ForeignKey("titles.id"),
@@ -51,13 +50,20 @@ class WatchEvent(db.Model):
         nullable=False,
     )
 
-    # relationship to Title (optional but very useful)
+    # relationship to Title
+    # (foreign_keys explicit so SQLAlchemy always knows which column to join on)
     title_ref = db.relationship(
         "Title",
+        foreign_keys=[title_id],
         lazy="joined",
     )
 
     def to_dict(self):
+        title_meta = None
+        if self.title_ref:
+            # title_ref.to_dict() exists in your Title model ✅
+            title_meta = self.title_ref.to_dict()
+
         return {
             "id": self.id,
             "title": self.title,
@@ -69,4 +75,5 @@ class WatchEvent(db.Model):
             "provider": self.provider,
             "notes": self.notes,
             "title_id": self.title_id,
+            "title_meta": title_meta,
         }
