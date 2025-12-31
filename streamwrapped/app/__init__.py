@@ -17,15 +17,17 @@ def create_app():
     migrate.init_app(app, db)
     jwt.init_app(app)
 
-    # register blueprints (INSIDE create_app)
+    # register blueprints
     from . import models  # noqa: F401
     from .routes.auth import auth_bp
     from .routes.history import history_bp
     from .routes.wrapped import wrapped_bp
+    from .routes.titles import titles_bp   
 
     app.register_blueprint(wrapped_bp, url_prefix="/wrapped")
     app.register_blueprint(auth_bp, url_prefix="/auth")
     app.register_blueprint(history_bp, url_prefix="/history")
+    app.register_blueprint(titles_bp, url_prefix="/titles")  
 
     # health check
     @app.get("/health")

@@ -43,13 +43,14 @@ def _clean_float(value):
         return None
 
 
-def _get_or_create_title_id(name: str, media_type: str) -> int:
-    """
-    Find or create a Title row and return its id.
-    Keeps Title unique by (name, media_type).
-    """
+def _normalize_title_key(name: str, media_type: str) -> tuple[str, str]:
     clean_name = (name or "").strip()
     clean_type = (media_type or "").strip().lower()
+    return clean_name, clean_type
+
+
+def _get_or_create_title_id(name: str, media_type: str) -> int:
+    clean_name, clean_type = _normalize_title_key(name, media_type)
 
     existing = Title.query.filter_by(name=clean_name, media_type=clean_type).first()
     if existing:
@@ -57,7 +58,16 @@ def _get_or_create_title_id(name: str, media_type: str) -> int:
 
     t = Title(name=clean_name, media_type=clean_type)
     db.session.add(t)
-    db.session.flush()  # get id without committing yet
+
+    try:
+        db.session.flush()
+    except Exception:
+        db.session.rollback()
+        existing = Title.query.filter_by(name=clean_name, media_type=clean_type).first()
+        if existing:
+            return existing.id
+        raise
+
     return t.id
 
 
@@ -93,6 +103,20 @@ def add_history_item():
 
     title_id = _get_or_create_title_id(title, media_type)
 
+    # 🚫 DUPLICATE PROTECTION (NEW)
+    existing = WatchEvent.query.filter_by(
+        user_id=user_id,
+        title_id=title_id,
+        watched_at=watched_at,
+    ).first()
+
+    if existing:
+        return err(
+            "DUPLICATE_EVENT",
+            "This title is already logged for that date",
+            409,
+        )
+
     event = WatchEvent(
         user_id=user_id,
         title_id=title_id,
@@ -108,7 +132,6 @@ def add_history_item():
     db.session.add(event)
     db.session.commit()
 
-    # IMPORTANT: cache invalidation for that year
     invalidate_cache(user_id, watched_at.year)
 
     return ok({"watch_event": event.to_dict()}, status=201)
@@ -143,7 +166,6 @@ def delete_history_item(event_id: int):
     db.session.delete(event)
     db.session.commit()
 
-    # IMPORTANT: cache invalidation for that year
     invalidate_cache(user_id, yr)
 
     return ok({"deleted": True})
@@ -169,7 +191,6 @@ def upload_csv():
     if not reader.fieldnames:
         return err("INVALID_CSV", "CSV has no header row", 400)
 
-    # normalize header (strip + lowercase + remove BOM)
     header = {c.strip().lower().lstrip("\ufeff") for c in reader.fieldnames}
     missing = required_cols - header
     if missing:
@@ -180,9 +201,10 @@ def upload_csv():
     errors = []
     years_touched = set()
 
-    for idx, row in enumerate(reader, start=2):  # header is row 1
+    title_id_cache: dict[tuple[str, str], int] = {}
+
+    for idx, row in enumerate(reader, start=2):
         try:
-            # normalize keys to lowercase and strip BOM/spaces
             normalized = {}
             for k, v in row.items():
                 key = (k or "").strip().lower().lstrip("\ufeff")
@@ -196,29 +218,21 @@ def upload_csv():
 
             if not title or not media_type or not watched_at_raw:
                 skipped += 1
-                errors.append({"row": idx, "reason": "missing title/media_type/watched_at"})
                 continue
 
             if media_type not in ALLOWED_MEDIA_TYPES:
                 skipped += 1
-                errors.append({"row": idx, "reason": "media_type must be movie or series"})
                 continue
 
             watched_at = _parse_watched_at(watched_at_raw)
             years_touched.add(watched_at.year)
 
-            runtime_minutes = _clean_int(row.get("runtime_minutes"))
-            episode_count = _clean_int(row.get("episode_count"))
-            rating = _clean_float(row.get("rating"))
-            provider = (row.get("provider") or "").strip() or None
-            notes = (row.get("notes") or "").strip() or None
-
-            if rating is not None and (rating < 0 or rating > 10):
-                skipped += 1
-                errors.append({"row": idx, "reason": "rating must be between 0 and 10"})
-                continue
-
-            title_id = _get_or_create_title_id(title, media_type)
+            key = _normalize_title_key(title, media_type)
+            if key in title_id_cache:
+                title_id = title_id_cache[key]
+            else:
+                title_id = _get_or_create_title_id(title, media_type)
+                title_id_cache[key] = title_id
 
             event = WatchEvent(
                 user_id=user_id,
@@ -226,11 +240,6 @@ def upload_csv():
                 title=title,
                 media_type=media_type,
                 watched_at=watched_at,
-                runtime_minutes=runtime_minutes,
-                episode_count=episode_count,
-                rating=rating,
-                provider=provider,
-                notes=notes,
             )
             db.session.add(event)
             inserted += 1
@@ -241,7 +250,6 @@ def upload_csv():
 
     db.session.commit()
 
-    # IMPORTANT: invalidate cache for all years touched by upload
     for y in years_touched:
         invalidate_cache(user_id, y)
 
@@ -249,7 +257,7 @@ def upload_csv():
         {
             "inserted": inserted,
             "skipped": skipped,
-            "errors": errors[:50],  # cap so response isn't huge
+            "errors": errors[:50],
             "years_touched": sorted(list(years_touched)),
         }
     )
